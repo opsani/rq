@@ -476,16 +476,14 @@ class Worker:
         If shutdown is requested in the middle of a job, wait until
         finish before shutting down and save the request in redis
         """
+        if self.scheduler:
+            self.stop_scheduler()
         if self.get_state() == WorkerStatus.BUSY:
             self._stop_requested = True
             self.set_shutdown_requested_date()
             self.log.debug('Stopping after current horse is finished. '
                            'Press Ctrl+C again for a cold shutdown.')
-            if self.scheduler:
-                self.stop_scheduler()
         else:
-            if self.scheduler:
-                self.stop_scheduler()
             raise StopRequested()
 
     def handle_warm_shutdown_request(self):
@@ -663,13 +661,13 @@ class Worker:
 
                 if self.should_run_maintenance_tasks:
                     self.run_maintenance_tasks()
-
                 result = self.queue_class.dequeue_any(self._ordered_queues, timeout,
                                                       connection=self.connection,
                                                       job_class=self.job_class,
                                                       serializer=self.serializer)
                 if result is not None:
 
+                    self.set_state(WorkerStatus.BUSY)
                     job, queue = result
                     job.redis_server_version = self.get_redis_server_version()
                     if self.log_job_description:
